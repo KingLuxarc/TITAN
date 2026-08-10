@@ -1,7 +1,7 @@
 {
-  "name": "titanbot",
-  "version": "2.1.0",
-  "description": "Modular Discord Community Bot",
+  "name": "luxe",
+  "version": "1.0.0",
+  "description": "Luxe — a powerful Discord community bot",
   "main": "src/app.js",
   "type": "module",
   "scripts": {
