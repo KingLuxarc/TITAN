@@ -1,8 +1,6 @@
 import { fileURLToPath } from "url";
 import path from "path";
 import botConfig, { validateConfig } from "./bot.js";
-import { shopConfig as shop } from "./shop/index.js";
-import { pgConfig } from "./postgres.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,17 +22,7 @@ const appConfig = {
     token: process.env.DISCORD_TOKEN || process.env.TOKEN,
     clientId: process.env.CLIENT_ID,
     guildId: process.env.GUILD_ID,
-    multiGuild: process.env.MULTI_GUILD === 'true',
-
-    shop: {
-      ...botConfig.shop,
-      ...shop,
-    },
-  },
-
-  // PostgreSQL configuration - Primary production database
-  postgresql: {
-    ...pgConfig,
+    multiGuild: false,
   },
 
   logging: {
@@ -52,52 +40,32 @@ const appConfig = {
       timestamp: true,
     },
     sentry: {
-      enabled: process.env.SENTRY_DSN ? true : false,
+      enabled: Boolean(process.env.SENTRY_DSN),
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV || "development",
     },
   },
 
-  api: {
-    port: process.env.PORT || 3000,
-    cors: {
-      origin: process.env.CORS_ORIGIN?.split(",") || "*",
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-    },
-    rateLimit: {
-      windowMs: 15 * 60 * 1000,
-      max: 100,
-    },
-  },
-
-  shop,
-
   features: {
-    
-    economy: true,                  
-    leveling: true,                 
-    moderation: true,               
-    logging: true,                  
-    welcome: true,                  
-
-    tickets: true,                  
-    giveaways: true,                
-    birthday: true,                 
-    counter: true,                  
-
-    verification: true,             
-    reactionRoles: true,            
-    joinToCreate: true,             
-
-    voice: true,                    
-    search: true,                   
-    tools: true,                    
-    utility: true,                  
-    community: true,                
-    fun: true,                      
-
-    music: false,                   
+    economy: false,
+    leveling: true,
+    moderation: true,
+    logging: true,
+    welcome: true,
+    tickets: true,
+    giveaways: true,
+    birthday: true,
+    counter: true,
+    verification: true,
+    reactionRoles: true,
+    joinToCreate: true,
+    voice: true,
+    search: true,
+    tools: true,
+    utility: true,
+    community: true,
+    fun: true,
+    music: false,
   },
 
   env: process.env.NODE_ENV || "development",
