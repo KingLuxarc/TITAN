@@ -11,7 +11,6 @@ export const botConfig = {
     defaultCooldown: 3,
     deleteCommands: false,
     testGuildId: process.env.TEST_GUILD_ID,
-    prefix: process.env.PREFIX || '!',
   },
 
   applications: {
@@ -28,34 +27,8 @@ export const botConfig = {
   },
 
   embeds: {
-    colors: {
-      primary: '#336699',
-      secondary: '#2F3136',
-      success: '#57F287',
-      error: '#ED4245',
-      warning: '#FEE75C',
-      info: '#3498DB',
-      light: '#FFFFFF',
-      dark: '#202225',
-      gray: '#99AAB5',
-      blurple: '#5865F2',
-      green: '#57F287',
-      yellow: '#FEE75C',
-      fuchsia: '#EB459E',
-      red: '#ED4245',
-      black: '#000000',
-      giveaway: { active: '#57F287', ended: '#ED4245' },
-      ticket: { open: '#57F287', claimed: '#FAA61A', closed: '#ED4245', pending: '#99AAB5' },
-      birthday: '#E91E63',
-      moderation: '#9B59B6',
-      priority: {
-        none: '#95A5A6',
-        low: '#3498DB',
-        medium: '#2ECC71',
-        high: '#F1C40F',
-        urgent: '#E74C3C',
-      },
-    },
+    // Retained for legacy configuration compatibility. Luxe ignores embed colours globally.
+    colors: {},
     footer: { text: 'Luxe', icon: null },
     thumbnail: null,
     author: { name: null, icon: null, url: null },
@@ -130,37 +103,13 @@ export const botConfig = {
   },
 
   counters: {
-    defaults: {
-      name: '{name} Counter',
-      description: 'Server {name} counter',
-      type: 'voice',
-      channelName: '{name}-{count}',
-    },
-    permissions: {
-      deny: ['VIEW_CHANNEL'],
-      allow: ['VIEW_CHANNEL', 'CONNECT', 'SPEAK'],
-    },
-    messages: {
-      created: 'Created counter **{name}**',
-      deleted: 'Deleted counter **{name}**',
-      updated: 'Updated counter **{name}**',
-    },
+    defaults: { name: '{name} Counter', description: 'Server {name} counter', type: 'voice', channelName: '{name}-{count}' },
+    permissions: { deny: ['VIEW_CHANNEL'], allow: ['VIEW_CHANNEL', 'CONNECT', 'SPEAK'] },
+    messages: { created: 'Created counter **{name}**', deleted: 'Deleted counter **{name}**', updated: 'Updated counter **{name}**' },
     types: {
-      members: {
-        name: 'Members',
-        description: 'Total members in the server',
-        getCount: (guild) => guild.memberCount.toString(),
-      },
-      bots: {
-        name: 'Bots',
-        description: 'Total bot accounts in the server',
-        getCount: (guild) => guild.members.cache.filter((m) => m.user.bot).size.toString(),
-      },
-      members_only: {
-        name: 'Humans',
-        description: 'Total human members (non-bots)',
-        getCount: (guild) => guild.members.cache.filter((m) => !m.user.bot).size.toString(),
-      },
+      members: { name: 'Members', description: 'Total members in the server', getCount: (guild) => guild.memberCount.toString() },
+      bots: { name: 'Bots', description: 'Total bot accounts in the server', getCount: (guild) => guild.members.cache.filter((m) => m.user.bot).size.toString() },
+      members_only: { name: 'Humans', description: 'Total human members (non-bots)', getCount: (guild) => guild.members.cache.filter((m) => !m.user.bot).size.toString() },
     },
   },
 
@@ -175,7 +124,7 @@ export const botConfig = {
 
   features: {
     economy: false,
-    leveling: true,
+    leveling: false,
     moderation: true,
     logging: true,
     welcome: true,
@@ -197,56 +146,26 @@ export const botConfig = {
 
 export function validateConfig() {
   const errors = [];
-
-  if (!process.env.DISCORD_TOKEN && !process.env.TOKEN) {
-    errors.push('Bot token is required (DISCORD_TOKEN or TOKEN).');
-  }
-
-  if (!process.env.CLIENT_ID) {
-    errors.push('Client ID is required (CLIENT_ID).');
-  }
-
-  if (!process.env.GUILD_ID) {
-    errors.push('Guild ID is required (GUILD_ID).');
-  }
-
-  if (errors.length === 0) {
-    logger.debug('Luxe configuration validated successfully.');
-  }
-
+  if (!process.env.DISCORD_TOKEN && !process.env.TOKEN) errors.push('Bot token is required (DISCORD_TOKEN or TOKEN).');
+  if (!process.env.CLIENT_ID) errors.push('Client ID is required (CLIENT_ID).');
+  if (!process.env.GUILD_ID) errors.push('Guild ID is required (GUILD_ID).');
+  if (errors.length === 0) logger.debug('Luxe configuration validated successfully.');
   return errors;
 }
 
 const configErrors = validateConfig();
-if (configErrors.length > 0) {
-  logger.error('Bot configuration errors:', configErrors.join('\n'));
-}
+if (configErrors.length > 0) logger.error('Bot configuration errors:', configErrors.join('\n'));
 
 export const BotConfig = botConfig;
 
 export function getColor(path, fallback = '#99AAB5') {
   if (typeof path === 'number') return path;
-  if (typeof path === 'string' && path.startsWith('#')) {
-    return parseInt(path.replace('#', ''), 16);
-  }
-
-  const result = String(path || '').split('.').reduce(
-    (obj, key) => (obj && obj[key] !== undefined ? obj[key] : fallback),
-    botConfig.embeds.colors,
-  );
-
-  if (typeof result === 'string' && result.startsWith('#')) {
-    return parseInt(result.replace('#', ''), 16);
-  }
-
-  return result;
+  if (typeof path === 'string' && path.startsWith('#')) return parseInt(path.replace('#', ''), 16);
+  return fallback;
 }
 
 export function getRandomColor() {
-  const colors = Object.values(botConfig.embeds.colors).flatMap((color) =>
-    typeof color === 'string' ? color : Object.values(color),
-  );
-  return colors[Math.floor(Math.random() * colors.length)];
+  return '#99AAB5';
 }
 
 export default botConfig;
