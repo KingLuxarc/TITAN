@@ -10,17 +10,26 @@ function evaluate(expression) {
 async function calculateModalHandler(interaction, client, args) {
     try {
         const operation = args[0];
-        const operandInput = interaction.fields.first();
-        const contextKey = operandInput?.customId?.split(':')[1];
-        if (!contextKey) return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'Failed to retrieve calculation context.' });
+        const modalFields = interaction.fields;
+        const fieldCollection = modalFields?.fields;
+        const operandInput = fieldCollection?.first?.();
+        const customId = operandInput?.customId;
+        const contextKey = customId?.split(':')[1];
+        if (!contextKey) {
+            return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'Failed to retrieve calculation context.' });
+        }
 
         const { calculationContexts } = await import('../commands/Tools/calculate.js');
         const context = calculationContexts.get(contextKey);
-        if (!context) return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'This calculation has expired. Please start a new calculation.' });
+        if (!context) {
+            return await replyUserError(interaction, { type: ErrorTypes.UNKNOWN, message: 'This calculation has expired. Please start a new calculation.' });
+        }
 
         await interaction.deferReply({ ephemeral: true });
-        const operand = interaction.fields.getTextInputValue(operandInput.customId);
-        if (!operand || Number.isNaN(Number(operand))) return await replyUserError(interaction, { type: ErrorTypes.VALIDATION, message: 'Please provide a valid number.' });
+        const operand = modalFields.getTextInputValue(customId);
+        if (!operand || Number.isNaN(Number(operand))) {
+            return await replyUserError(interaction, { type: ErrorTypes.VALIDATION, message: 'Please provide a valid number.' });
+        }
 
         const { expression, operator } = context;
         const newExpression = `(${expression}) ${operator} (${operand})`;
@@ -28,7 +37,9 @@ async function calculateModalHandler(interaction, client, args) {
         let formattedNewResult = typeof newResult === 'number'
             ? newResult.toLocaleString('en-US', { maximumFractionDigits: 10 })
             : String(newResult);
-        if (typeof newResult === 'number' && Math.abs(newResult) > 0 && (Math.abs(newResult) >= 1e10 || Math.abs(newResult) < 1e-3)) formattedNewResult = newResult.toExponential(6);
+        if (typeof newResult === 'number' && Math.abs(newResult) > 0 && (Math.abs(newResult) >= 1e10 || Math.abs(newResult) < 1e-3)) {
+            formattedNewResult = newResult.toExponential(6);
+        }
 
         const updatedEmbed = successEmbed('🧮 Calculation Result', `**Expression:** \`${newExpression.replace(/`/g, '\\`')}\`\n**Result:** \`${formattedNewResult}\`\n\n*Use the buttons below to perform more operations.*`);
         if (context.messageId && context.channelId) {
