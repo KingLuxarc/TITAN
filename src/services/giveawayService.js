@@ -8,7 +8,8 @@ import { checkRateLimit, getRateLimitStatus } from '../utils/rateLimiter.js';
 import { logEvent, EVENT_TYPES } from './loggingService.js';
 
 const GIVEAWAY_INTERACTION_COOLDOWN = 1000;
-const GIVEAWAY_DIVIDER = '━━━━━━━━━━━━━━━━━━━━━━━━';
+// Discord Markdown horizontal rule. Do NOT replace this with a Unicode line.
+const GIVEAWAY_DIVIDER = '---';
 
 function getGiveawayInteractionKey(userId, giveawayId) {
     return `giveaway:${userId}:${giveawayId}`;
@@ -47,23 +48,27 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
     try {
         const isEnded = status === 'ended' || status === 'reroll';
         const description = giveaway.description?.trim();
+        const endTime = Number(giveaway.endsAt ?? giveaway.endTime);
         const lines = [];
 
         if (description) lines.push(description, '');
         lines.push(GIVEAWAY_DIVIDER, '');
 
         if (giveaway.hostId) lines.push(`**Host:** <@${giveaway.hostId}>`);
-        lines.push(`**Winners:** ${giveaway.winnerCount}`);
-        lines.push(`**Entries:** ${giveaway.participants?.length || 0}`, '', GIVEAWAY_DIVIDER, '');
+        lines.push(`**Winners:** ${giveaway.winnerCount ?? 1}`);
+        lines.push(`**Entries:** ${Array.isArray(giveaway.participants) ? giveaway.participants.length : 0}`);
+        lines.push('', GIVEAWAY_DIVIDER, '');
 
         if (isEnded) {
             const winnerDisplay = winners.length > 0 ? winners.map((id) => `<@${id}>`).join(', ') : 'No valid entries';
             lines.push(`**Winners:** ${winnerDisplay}`);
-        } else {
-            const endTime = giveaway.endsAt || giveaway.endTime;
+        } else if (Number.isFinite(endTime) && endTime > 0) {
             lines.push(`**Ends:** <t:${Math.floor(endTime / 1000)}:R>`);
+        } else {
+            lines.push('**Ends:** Unknown');
         }
 
+        // Deliberately do not call setColor(): a giveaway should have no embed colour strip.
         return new EmbedBuilder()
             .setTitle(giveaway.prize)
             .setDescription(lines.join('\n'));
