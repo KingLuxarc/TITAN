@@ -1,6 +1,14 @@
 // giveawayService.js
 
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import {
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ContainerBuilder,
+    SeparatorBuilder,
+    SeparatorSpacingSize,
+    TextDisplayBuilder,
+} from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { TitanBotError, ErrorTypes } from '../utils/errorHandler.js';
 import { getEndedGiveaways, markGiveawayEnded } from '../utils/database.js';
@@ -8,7 +16,6 @@ import { checkRateLimit, getRateLimitStatus } from '../utils/rateLimiter.js';
 import { logEvent, EVENT_TYPES } from './loggingService.js';
 
 const GIVEAWAY_INTERACTION_COOLDOWN = 1000;
-const GIVEAWAY_DIVIDER = '━━━━━━━━━━━━━━━━━━━━━━━━';
 
 function getGiveawayInteractionKey(userId, giveawayId) {
     return `giveaway:${userId}:${giveawayId}`;
@@ -44,33 +51,66 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
         const isEnded = status === 'ended' || status === 'reroll';
         const description = giveaway.description?.trim();
         const endTime = Number(giveaway.endsAt ?? giveaway.endTime);
-        const lines = [];
+        const entryCount = Array.isArray(giveaway.participants) ? giveaway.participants.length : 0;
 
-        if (description) lines.push(description, '');
-        lines.push(GIVEAWAY_DIVIDER, '');
+        const container = new ContainerBuilder();
 
-        if (giveaway.hostId) lines.push(`**Host:** <@${giveaway.hostId}>`);
-        lines.push(`**Winners:** ${giveaway.winnerCount ?? 1}`);
-        lines.push(`**Entries:** ${Array.isArray(giveaway.participants) ? giveaway.participants.length : 0}`);
-        lines.push('', GIVEAWAY_DIVIDER, '');
+        // Components V2 TextDisplay supports Discord Markdown headings, giving the giveaway
+        // name the large title treatment without using an EmbedBuilder or colour bar.
+        container.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(`## ${giveaway.prize}`),
+        );
 
-        if (isEnded) {
-            const winnerDisplay = winners.length > 0 ? winners.map((id) => `<@${id}>`).join(', ') : 'No valid entries';
-            lines.push(`**Winners:** ${winnerDisplay}`);
-        } else if (Number.isFinite(endTime) && endTime > 0) {
-            lines.push(`**Ends:** <t:${Math.floor(endTime / 1000)}:R>`);
-        } else {
-            lines.push('**Ends:** Unknown');
+        if (description) {
+            container.addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(description),
+            );
         }
 
-        // Discord embeds do not support Markdown horizontal rules in descriptions.
-        // Use a visual divider glyph for a true line instead of literal "---" text.
-        return new EmbedBuilder()
-            .setTitle(`**${giveaway.prize}**`)
-            .setDescription(lines.join('\n'));
+        // This is Discord's real Components V2 Separator component — not Unicode text.
+        container.addSeparatorComponents(
+            new SeparatorBuilder()
+                .setDivider(true)
+                .setSpacing(SeparatorSpacingSize.Small),
+        );
+
+        const details = [];
+        if (giveaway.hostId) details.push(`**Host:** <@${giveaway.hostId}>`);
+        details.push(`**Winners:** ${giveaway.winnerCount ?? 1}`);
+        details.push(`**Entries:** ${entryCount}`);
+
+        container.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(details.join('\n')),
+        );
+
+        container.addSeparatorComponents(
+            new SeparatorBuilder()
+                .setDivider(true)
+                .setSpacing(SeparatorSpacingSize.Small),
+        );
+
+        if (isEnded) {
+            const winnerDisplay = winners.length > 0
+                ? winners.map((id) => `<@${id}>`).join(', ')
+                : 'No valid entries';
+            container.addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`**Winners:** ${winnerDisplay}`),
+            );
+        } else if (Number.isFinite(endTime) && endTime > 0) {
+            container.addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`**Ends:** <t:${Math.floor(endTime / 1000)}:R>`),
+            );
+        } else {
+            container.addTextDisplayComponents(
+                new TextDisplayBuilder().setContent('**Ends:** Unknown'),
+            );
+        }
+
+        container.addActionRowComponents(createGiveawayButtons(isEnded));
+        return container;
     } catch (error) {
-        logger.error('Error creating giveaway embed:', error);
-        throw new TitanBotError('Failed to create giveaway embed', ErrorTypes.UNKNOWN, 'An internal error occurred while formatting the giveaway.', { error: error.message });
+        logger.error('Error creating giveaway Components V2:', error);
+        throw new TitanBotError('Failed to create giveaway message', ErrorTypes.UNKNOWN, 'An internal error occurred while formatting the giveaway.', { error: error.message });
     }
 }
 
@@ -140,7 +180,10 @@ export async function checkGiveaways(client) {
                 if (!message) continue;
                 const participants = giveaway.participants || [];
                 const winners = selectWinners(participants, giveaway.winnerCount || 1);
-                await message.edit({ embeds: [createGiveawayEmbed(giveaway, 'ended', winners)], components: [createGiveawayButtons(true)] });
+                await message.edit({
+                    components: [createGiveawayEmbed(giveaway, 'ended', winners)],
+                    flags: 32768,
+                });
                 giveaway.ended = true;
                 giveaway.isEnded = true;
                 giveaway.winnerIds = winners;
