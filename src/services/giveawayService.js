@@ -109,7 +109,7 @@ export function createGiveawayButtons(ended = false, messageId = null) {
     } else {
         row.addComponents(
             new ButtonBuilder().setCustomId('giveaway_join').setLabel('🎉 Join').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`giveaway_participants:${messageId || 'unknown'}`).setLabel('👥 View Participants').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('giveaway_participants').setLabel('👥 View Participants').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('giveaway_end').setLabel('🛑 End').setStyle(ButtonStyle.Secondary),
         );
     }
