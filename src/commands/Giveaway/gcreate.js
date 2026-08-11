@@ -23,6 +23,9 @@ export default {
         .addStringOption((option) =>
             option.setName('description').setDescription('An optional description for the giveaway.').setRequired(false),
         )
+        .addUserOption((option) =>
+            option.setName('host').setDescription('Optional host of the giveaway.').setRequired(false),
+        )
         .addChannelOption((option) =>
             option.setName('channel').setDescription('The channel to send the giveaway to (defaults to current channel).').addChannelTypes(ChannelType.GuildText).setRequired(false),
         )
@@ -38,12 +41,11 @@ export default {
                 throw new TitanBotError('User lacks ManageGuild permission', ErrorTypes.PERMISSION, "You need the 'Manage Server' permission to start a giveaway.", { userId: interaction.user.id, guildId: interaction.guildId });
             }
 
-            logger.info(`Giveaway creation started by ${interaction.user.tag} in guild ${interaction.guildId}`);
-
             const durationString = interaction.options.getString('duration');
             const winnerCount = interaction.options.getInteger('winners');
             const prize = interaction.options.getString('prize');
             const description = interaction.options.getString('description')?.trim() || null;
+            const hostUser = interaction.options.getUser('host');
             const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
 
             const durationMs = parseDuration(durationString);
@@ -65,7 +67,8 @@ export default {
                 guildId: interaction.guildId,
                 prize: prizeName,
                 description,
-                hostId: interaction.user.id,
+                hostId: hostUser?.id ?? null,
+                creatorId: interaction.user.id,
                 endTime,
                 endsAt: endTime,
                 winnerCount,
@@ -76,7 +79,6 @@ export default {
             };
 
             const components = createGiveawayEmbed(initialGiveawayData, 'active');
-
             const giveawayMessage = await targetChannel.send({
                 components: [components],
                 flags: MessageFlags.IsComponentsV2,
@@ -100,6 +102,7 @@ export default {
                             { name: 'Winners', value: winnerCount.toString(), inline: true },
                             { name: 'Duration', value: durationString, inline: true },
                             { name: 'Channel', value: targetChannel.toString(), inline: true },
+                            { name: 'Host', value: hostUser ? `<@${hostUser.id}>` : 'None', inline: true },
                         ],
                     },
                 });
@@ -108,7 +111,7 @@ export default {
             }
 
             await InteractionHelper.safeReply(interaction, {
-                embeds: [successEmbed('Giveaway Started!', `A new giveaway for **${prizeName}** has been started in ${targetChannel} and will end in **${durationString}**.`)],
+                embeds: [successEmbed('Giveaway Started! 🎉', `A new giveaway for **${prizeName}** has been started in ${targetChannel} and will end in **${durationString}**.`)],
                 flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
