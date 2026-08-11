@@ -1,4 +1,4 @@
-import { MessageFlags, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder } from 'discord.js';
+import { MessageFlags, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { successEmbed } from '../utils/embeds.js';
 import { logger } from '../utils/logger.js';
 import { TitanBotError, ErrorTypes, handleInteractionError } from '../utils/errorHandler.js';
@@ -6,8 +6,6 @@ import { getGuildGiveaways, saveGiveaway, isGiveawayEnded } from '../utils/givea
 import { Mutex } from '../utils/mutex.js';
 import { selectWinners, isUserRateLimited, recordUserInteraction, createGiveawayEmbed } from '../services/giveawayService.js';
 import { logEvent, EVENT_TYPES } from '../services/loggingService.js';
-
-const COMPONENTS_V2_FLAG = MessageFlags.IsComponentsV2;
 
 async function getGiveaway(client, guildId, messageId) {
     const guildGiveaways = await getGuildGiveaways(client, guildId);
@@ -59,19 +57,29 @@ export const giveawayJoinHandler = {
 
 export const giveawayParticipantsHandler = {
     customId: 'giveaway_participants',
-    async execute(interaction, client, args = []) {
+    async execute(interaction, client) {
         try {
-            const messageId = args[0] || interaction.message.id;
+            // The viewer button lives on the giveaway itself, so the clicked message is always the giveaway message.
+            const messageId = interaction.message.id;
             const giveaway = await getGiveaway(client, interaction.guildId, messageId);
             if (!giveaway) return replyUserError(interaction, { message: 'This giveaway could not be found.' });
+
             const participants = Array.isArray(giveaway.participants) ? giveaway.participants : [];
             const visible = participants.slice(0, 50).map((id, index) => `${index + 1}. <@${id}>`).join('\n') || '*No one has entered yet.*';
             const more = participants.length > 50 ? `\n\n…and ${participants.length - 50} more participant(s).` : '';
             const embed = new EmbedBuilder()
-                .setTitle('Giveaway Participants')
-                .setDescription(`**${giveaway.prize}**\n\n${visible}${more}`)
+                .setTitle('👥 Giveaway Participants')
+                .setDescription(`**🎁 ${giveaway.prize}**\n\n${visible}${more}`)
                 .setFooter({ text: `${participants.length} participant${participants.length === 1 ? '' : 's'} • This list is private` });
-            await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`giveaway_kick:${messageId}`)
+                    .setLabel('🚫 Kick Participant')
+                    .setStyle(ButtonStyle.Danger),
+            );
+
+            await interaction.reply({ embeds: [embed], components: [row], flags: MessageFlags.Ephemeral });
         } catch (error) {
             await handleInteractionError(interaction, error, { type: 'button', customId: 'giveaway_participants', handler: 'giveaway' });
         }
@@ -82,11 +90,11 @@ export const giveawayKickHandler = {
     customId: 'giveaway_kick',
     async execute(interaction, client, args = []) {
         try {
-            const messageId = args[0] || interaction.message.id;
+            const messageId = args[0];
             const giveaway = await getGiveaway(client, interaction.guildId, messageId);
             if (!giveaway) return replyUserError(interaction, { message: 'This giveaway could not be found.' });
             if (!canManageGiveaway(interaction, giveaway)) return replyUserError(interaction, { message: 'Only the giveaway host or a member with Manage Server can kick participants.' });
-            if (isGiveawayEnded(giveaway) || giveaway.ended || giveaway.isEnded) return replyUserError(interaction, { message: 'This giveaway has already ended.' });
+            if (isGiveawayEnded(giveaway) || giveaway.ended || giveaway.isEnded || Number(giveaway.endsAt ?? giveaway.endTime) <= Date.now()) return replyUserError(interaction, { message: 'This giveaway has already ended.' });
 
             const modal = new ModalBuilder()
                 .setCustomId(`giveaway_kick_modal:${messageId}`)
@@ -167,7 +175,7 @@ export const giveawayViewHandler = {
             if (!giveaway) throw new TitanBotError('Giveaway not found', ErrorTypes.VALIDATION, 'This giveaway could not be found.');
             if (!giveaway.ended && !giveaway.isEnded && !isGiveawayEnded(giveaway)) return replyUserError(interaction, { message: 'This giveaway has not ended yet, so winners are not available.' });
             const winnerIds = Array.isArray(giveaway.winnerIds) ? giveaway.winnerIds : [];
-            await interaction.reply({ embeds: [successEmbed(`Winners for ${giveaway.prize || 'this giveaway'} 🎉', winnerIds.length > 0 ? winnerIds.map(id => `<@${id}>`).join(', ') : 'No valid winners were selected for this giveaway.')], flags: MessageFlags.Ephemeral });
+            await interaction.reply({ embeds: [successEmbed(`Winners for ${giveaway.prize || 'this giveaway'} 🎉`, winnerIds.length > 0 ? winnerIds.map(id => `<@${id}>`).join(', ') : 'No valid winners were selected for this giveaway.')], flags: MessageFlags.Ephemeral });
         } catch (error) {
             logger.error('Error in giveaway view handler:', error);
             await handleInteractionError(interaction, error, { type: 'button', customId: 'giveaway_view', handler: 'giveaway' });
