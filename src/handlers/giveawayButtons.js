@@ -4,10 +4,9 @@ import {
     ButtonStyle,
     ContainerBuilder,
     MessageFlags,
-    StringSelectMenuBuilder,
+    UserSelectMenuBuilder,
     TextDisplayBuilder,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
 import { getGuildGiveaways, saveGiveaway, isGiveawayEnded } from '../utils/giveaways.js';
 import { Mutex } from '../utils/mutex.js';
 import { selectWinners, isUserRateLimited, recordUserInteraction, createGiveawayEmbed, addGiveawayDivider } from '../services/giveawayService.js';
@@ -43,7 +42,7 @@ async function replyUserError(interaction, message) {
     return interaction.reply({ components: [container], flags: EPHEMERAL_V2 });
 }
 
-export function buildParticipantsPanel(giveaway, messageId, kickMode = false, guild = null) {
+export function buildParticipantsPanel(giveaway, messageId, kickMode = false) {
     const participants = Array.isArray(giveaway.participants) ? giveaway.participants : [];
     const container = new ContainerBuilder();
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent('## 👥 Giveaway Participants'));
@@ -62,17 +61,13 @@ export function buildParticipantsPanel(giveaway, messageId, kickMode = false, gu
     addGiveawayDivider(container);
 
     if (kickMode && participants.length > 0) {
-        const options = participants.slice(0, 25).map((id) => ({
-            label: `Participant ${id}`.slice(0, 100),
-            description: 'Select this participant to remove them',
-            value: id,
-        }));
         container.addActionRowComponents(
             new ActionRowBuilder().addComponents(
-                new StringSelectMenuBuilder()
+                new UserSelectMenuBuilder()
                     .setCustomId(`giveaway_kick_select:${messageId}`)
                     .setPlaceholder('Select a participant to kick')
-                    .addOptions(options),
+                    .setMinValues(1)
+                    .setMaxValues(1),
             ),
         );
         container.addActionRowComponents(
@@ -80,7 +75,7 @@ export function buildParticipantsPanel(giveaway, messageId, kickMode = false, gu
                 new ButtonBuilder().setCustomId(`giveaway_participants:${messageId}`).setLabel('↩️ Back').setStyle(ButtonStyle.Secondary),
             ),
         );
-    } else {
+    } else if (participants.length > 0) {
         container.addActionRowComponents(
             new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`giveaway_kick:${messageId}`).setLabel('🚫 Kick Participant').setStyle(ButtonStyle.Danger),
@@ -119,13 +114,12 @@ export const giveawayJoinHandler = {
 
 export const giveawayParticipantsHandler = {
     customId: 'giveaway_participants',
-    async execute(interaction, client, args = []) {
+    async execute(interaction, client) {
         try {
             const messageId = interaction.message.id;
             const giveaway = await getGiveaway(client, interaction.guildId, messageId);
             if (!giveaway) return replyUserError(interaction, 'This giveaway could not be found.');
-            const container = buildParticipantsPanel(giveaway, messageId, false, interaction.guild);
-            await interaction.reply({ components: [container], flags: EPHEMERAL_V2 });
+            await interaction.reply({ components: [buildParticipantsPanel(giveaway, messageId, false)], flags: EPHEMERAL_V2 });
         } catch (error) {
             await replyUserError(interaction, 'Something went wrong while loading the participants. Please try again.');
         }
@@ -141,8 +135,7 @@ export const giveawayKickHandler = {
             if (!giveaway) return replyUserError(interaction, 'This giveaway could not be found.');
             if (!canManageGiveaway(interaction, giveaway)) return replyUserError(interaction, 'Only the giveaway host or a member with Manage Server can kick participants.');
             if (isGiveawayEnded(giveaway) || giveaway.ended || giveaway.isEnded || Number(giveaway.endsAt ?? giveaway.endTime) <= Date.now()) return replyUserError(interaction, 'This giveaway has already ended.');
-            const container = buildParticipantsPanel(giveaway, messageId, true, interaction.guild);
-            await interaction.update({ components: [container] });
+            await interaction.update({ components: [buildParticipantsPanel(giveaway, messageId, true)] });
         } catch (error) {
             logger.error('Error in giveaway kick handler:', error);
             await replyUserError(interaction, 'Something went wrong while opening the kick menu. Please try again.');
