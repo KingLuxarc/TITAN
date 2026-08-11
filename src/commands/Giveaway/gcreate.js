@@ -11,35 +11,18 @@ export default {
     data: new SlashCommandBuilder()
         .setName('gcreate')
         .setDescription('Starts a new giveaway in a specified channel.')
-        .addStringOption((option) =>
-            option.setName('duration').setDescription('How long the giveaway should last (e.g., 1h, 30m, 5d).').setRequired(true),
-        )
-        .addIntegerOption((option) =>
-            option.setName('winners').setDescription('The number of winners to pick.').setMinValue(1).setMaxValue(10).setRequired(true),
-        )
-        .addStringOption((option) =>
-            option.setName('prize').setDescription('The giveaway name/prize.').setRequired(true),
-        )
-        .addStringOption((option) =>
-            option.setName('description').setDescription('An optional description for the giveaway.').setRequired(false),
-        )
-        .addUserOption((option) =>
-            option.setName('host').setDescription('Optional host of the giveaway.').setRequired(false),
-        )
-        .addChannelOption((option) =>
-            option.setName('channel').setDescription('The channel to send the giveaway to (defaults to current channel).').addChannelTypes(ChannelType.GuildText).setRequired(false),
-        )
+        .addStringOption((option) => option.setName('duration').setDescription('How long the giveaway should last (e.g., 1h, 30m, 5d).').setRequired(true))
+        .addIntegerOption((option) => option.setName('winners').setDescription('The number of winners to pick.').setMinValue(1).setMaxValue(10).setRequired(true))
+        .addStringOption((option) => option.setName('prize').setDescription('The giveaway name/prize.').setRequired(true))
+        .addStringOption((option) => option.setName('description').setDescription('An optional description for the giveaway.').setRequired(false))
+        .addUserOption((option) => option.setName('host').setDescription('Optional host of the giveaway.').setRequired(false))
+        .addChannelOption((option) => option.setName('channel').setDescription('The channel to send the giveaway to (defaults to current channel).').addChannelTypes(ChannelType.GuildText).setRequired(false))
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
     async execute(interaction) {
         try {
-            if (!interaction.inGuild()) {
-                throw new TitanBotError('Giveaway command used outside guild', ErrorTypes.VALIDATION, 'This command can only be used in a server.', { userId: interaction.user.id });
-            }
-
-            if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
-                throw new TitanBotError('User lacks ManageGuild permission', ErrorTypes.PERMISSION, "You need the 'Manage Server' permission to start a giveaway.", { userId: interaction.user.id, guildId: interaction.guildId });
-            }
+            if (!interaction.inGuild()) throw new TitanBotError('Giveaway command used outside guild', ErrorTypes.VALIDATION, 'This command can only be used in a server.', { userId: interaction.user.id });
+            if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) throw new TitanBotError('User lacks ManageGuild permission', ErrorTypes.PERMISSION, "You need the 'Manage Server' permission to start a giveaway.", { userId: interaction.user.id, guildId: interaction.guildId });
 
             const durationString = interaction.options.getString('duration');
             const winnerCount = interaction.options.getInteger('winners');
@@ -47,18 +30,11 @@ export default {
             const description = interaction.options.getString('description')?.trim() || null;
             const hostUser = interaction.options.getUser('host');
             const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
-
             const durationMs = parseDuration(durationString);
             validateWinnerCount(winnerCount);
             const prizeName = validatePrize(prize);
-
-            if (description && description.length > 4096) {
-                throw new TitanBotError('Giveaway description too long', ErrorTypes.VALIDATION, 'The description must be 4096 characters or fewer.');
-            }
-
-            if (!targetChannel.isTextBased()) {
-                throw new TitanBotError('Target channel is not text-based', ErrorTypes.VALIDATION, 'The channel must be a text channel.', { channelId: targetChannel.id, channelType: targetChannel.type });
-            }
+            if (description && description.length > 4096) throw new TitanBotError('Giveaway description too long', ErrorTypes.VALIDATION, 'The description must be 4096 characters or fewer.');
+            if (!targetChannel.isTextBased()) throw new TitanBotError('Target channel is not text-based', ErrorTypes.VALIDATION, 'The channel must be a text channel.');
 
             const endTime = Date.now() + durationMs;
             const initialGiveawayData = {
@@ -78,13 +54,15 @@ export default {
                 createdAt: new Date().toISOString(),
             };
 
-            const components = createGiveawayEmbed(initialGiveawayData, 'active');
             const giveawayMessage = await targetChannel.send({
-                components: [components],
+                components: [createGiveawayEmbed(initialGiveawayData, 'active')],
                 flags: MessageFlags.IsComponentsV2,
             });
 
             initialGiveawayData.messageId = giveawayMessage.id;
+            // Re-render once with the real message ID so participant/kick controls carry the correct target.
+            await giveawayMessage.edit({ components: [createGiveawayEmbed(initialGiveawayData, 'active')] });
+
             const saved = await saveGiveaway(interaction.client, interaction.guildId, initialGiveawayData);
             if (!saved) logger.warn(`Failed to save giveaway: ${giveawayMessage.id}`);
 
