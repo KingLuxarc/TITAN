@@ -9,6 +9,16 @@ const __dirname = path.dirname(__filename);
 const MAX_COMMANDS = 100;
 const COMMAND_COUNT_WARN_THRESHOLD = 90;
 
+const ADMIN_COMMANDS = new Set([
+    'commands', 'permission', 'configwizard', 'logging', 'app-admin',
+    'serverstats', 'channelinfo', 'roleinfo', 'admins'
+]);
+
+function isAdminCommand(command) {
+    const category = command?.category?.toLowerCase?.();
+    return category === 'moderation' || ADMIN_COMMANDS.has(command?.data?.name?.toLowerCase?.());
+}
+
 function getSubcommandInfo(commandData) {
     const subcommands = [];
     if (commandData.options) {
@@ -20,6 +30,39 @@ function getSubcommandInfo(commandData) {
         }
     }
     return subcommands;
+}
+
+function addVisibilityOption(options) {
+    if (!Array.isArray(options)) return;
+    const hasSubcommands = options.some(option => option.type === 1 || option.type === 2);
+
+    if (hasSubcommands) {
+        for (const option of options) {
+            if (option.type === 1) {
+                option.options ??= [];
+                if (!option.options.some(child => child.name === 'visible')) {
+                    option.options.push({
+                        type: 5,
+                        name: 'visible',
+                        description: 'Show the confirmation to everyone instead of only you',
+                        required: false,
+                    });
+                }
+            } else if (option.type === 2) {
+                addVisibilityOption(option.options);
+            }
+        }
+        return;
+    }
+
+    if (!options.some(option => option.name === 'visible')) {
+        options.push({
+            type: 5,
+            name: 'visible',
+            description: 'Show the confirmation to everyone instead of only you',
+            required: false,
+        });
+    }
 }
 
 async function getAllFiles(directory, fileList = []) {
@@ -82,9 +125,14 @@ function collectCommandPayloads(client) {
         const commandJson = command.data.toJSON();
 
         // Discord's command-level default permissions cannot express our per-role
-        // /permissions system. Moderation commands are therefore registered without
+        // /permission system. Moderation commands are therefore registered without
         // a Discord-level permission gate and enforced at runtime by permissionGuard.
         if (command.category?.toLowerCase?.() === 'moderation') delete commandJson.default_member_permissions;
+
+        // Admin/moderation commands get a common optional visibility control at the
+        // end of their options. This is injected into the registration payload so
+        // individual command files do not need to duplicate the option definition.
+        if (isAdminCommand(command)) addVisibilityOption(commandJson.options);
 
         commands.push(commandJson);
         totalSubcommands += getSubcommandInfo(commandJson).length;
