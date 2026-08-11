@@ -63,7 +63,29 @@ export default {
           if (interaction.commandName === 'apply' && focusedOption.name === 'application') {
             try { const { getApplicationRoles } = await import('../utils/database.js'); const roles = await getApplicationRoles(client, interaction.guildId); const roleName = interaction.options.getString('application', false); const filtered = roles.filter(role => role.enabled !== false && role.name.toLowerCase().startsWith(roleName?.toLowerCase() || '')); await interaction.respond(filtered.slice(0, 25).map(role => ({ name: `${role.name}${role.enabled === false ? ' (disabled)' : ''}`, value: role.name }))); } catch { await interaction.respond([]); }
           } else if (interaction.commandName === 'app-admin' && focusedOption.name === 'application') {
-            try { const { getApplicationRoles } = await import('../services/applicationService.js'); const roles = await getApplicationRoles(client, interaction.guildId); const appName = interaction.options.getString('application', false); const filtered = roles.filter(role => role.name.toLowerCase().startsWith(appName?.toLowerCase() || '')); await interaction.respond(filtered.slice(0, 25).map(role => ({ name: role.name, value: role.name }))); } catch { await interaction.respond([]); }
+            try { const { getApplicationRoles } = await import('../utils/database.js'); const roles = await getApplicationRoles(client, interaction.guildId); const appName = interaction.options.getString('application', false); const filtered = roles.filter(role => role.name.toLowerCase().startsWith(appName?.toLowerCase() || '')); await interaction.respond(filtered.slice(0, 25).map(role => ({ name: role.name, value: role.name }))); } catch { await interaction.respond([]); }
+          } else if (interaction.commandName === 'reactroles' && focusedOption.name === 'panel') {
+            try {
+              const { getAllReactionRoleMessages, deleteReactionRoleMessage } = await import('../services/reactionRoleService.js');
+              const panels = await getAllReactionRoleMessages(client, interaction.guildId);
+              const validPanels = [];
+              for (const panel of panels || []) {
+                if (!panel.messageId || !panel.channelId) continue;
+                const channel = interaction.guild?.channels.cache.get(panel.channelId);
+                if (!channel) { await deleteReactionRoleMessage(client, interaction.guildId, panel.messageId).catch(() => {}); continue; }
+                const msg = await channel.messages.fetch(panel.messageId).catch(() => null);
+                if (!msg) { await deleteReactionRoleMessage(client, interaction.guildId, panel.messageId).catch(() => {}); continue; }
+                validPanels.push(panel);
+              }
+              const roleChoices = await Promise.all(validPanels.slice(0, 25).map(async panel => {
+                const channel = interaction.guild?.channels.cache.get(panel.channelId);
+                if (!channel) return null;
+                const msg = await channel.messages.fetch(panel.messageId).catch(() => null);
+                if (!msg) return null;
+                return { name: `${msg?.embeds?.[0]?.title ?? 'Untitled Panel'} (${channel?.name ?? 'unknown'})`.substring(0, 100), value: panel.messageId };
+              }));
+              await interaction.respond(roleChoices.filter(Boolean));
+            } catch { await interaction.respond([]); }
           }
         } else if (interaction.isButton()) {
           if (interaction.customId.startsWith('shared_todo_')) {
