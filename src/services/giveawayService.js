@@ -19,12 +19,13 @@ function getGiveawayInteractionKey(userId, giveawayId) {
     return `giveaway:${userId}:${giveawayId}`;
 }
 
-function addDivider(container) {
+export function addGiveawayDivider(container) {
     container.addSeparatorComponents(
         new SeparatorBuilder()
             .setDivider(true)
             .setSpacing(SeparatorSpacingSize.Small),
     );
+    return container;
 }
 
 export function parseDuration(durationString) {
@@ -63,29 +64,30 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
 
         if (isEnded) {
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent('## 🏆 Winners Selected 🏆'));
+            addGiveawayDivider(container);
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**🎁 Prize:** ${giveaway.prize || 'Unknown Prize'}`));
             if (description) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**📝 Description:** ${description}`));
-            addDivider(container);
+            addGiveawayDivider(container);
             const endedAt = giveaway.endedAt ? Date.parse(giveaway.endedAt) : Date.now();
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**⏰ Ended:** <t:${Math.floor(endedAt / 1000)}:R>`));
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**👥 Entries:** ${entryCount} Participant${entryCount === 1 ? '' : 's'}`));
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**👑 Host:** ${giveaway.hostId ? `<@${giveaway.hostId}>` : 'None'}`));
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**🏆 Winners:** ${giveaway.winnerCount ?? 1}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**🎯 Winners:** ${giveaway.winnerCount ?? 1}`));
+            addGiveawayDivider(container);
             container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**🎉 Giveaway Winners:** ${selectedWinners.length > 0 ? selectedWinners.map((id) => `<@${id}>`).join(', ') : 'No valid entries'}`));
-            addDivider(container);
             container.addActionRowComponents(createGiveawayButtons(true, giveaway.messageId));
             return container;
         }
 
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${giveaway.prize}`));
         if (description) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(description));
-        addDivider(container);
+        addGiveawayDivider(container);
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent([
             giveaway.hostId ? `**👑 Host:** <@${giveaway.hostId}>` : null,
             `**🏆 Winners:** ${giveaway.winnerCount ?? 1}`,
             `**👥 Entries:** ${entryCount}`,
         ].filter(Boolean).join('\n')));
-        addDivider(container);
+        addGiveawayDivider(container);
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
             Number.isFinite(endTime) && endTime > 0
                 ? `**⏰ Ends:** <t:${Math.floor(endTime / 1000)}:R>`
@@ -167,13 +169,7 @@ export async function checkGiveaways(client) {
                 giveaway.endedAt = new Date().toISOString();
                 await message.edit({ components: [createGiveawayEmbed(giveaway, 'ended', winners)] });
                 await markGiveawayEnded(client, giveawayId, giveaway);
-                if (winners.length > 0) {
-                    const winnerMentions = winners.map((id) => `<@${id}>`).join(', ');
-                    await channel.send({ content: `🎉 Congratulations ${winnerMentions}! You won the **${giveaway.prize || 'giveaway'}**!${giveaway.hostId ? ` Please contact <@${giveaway.hostId}> to claim your prize.` : ''}` });
-                    try { await logEvent({ client, guildId, eventType: EVENT_TYPES.GIVEAWAY_WINNER, data: { description: `Giveaway ended with ${winners.length} winner(s)`, channelId: channel.id } }); } catch (error) { logger.debug('Error logging giveaway winner:', error); }
-                } else {
-                    await channel.send({ content: `The giveaway for **${giveaway.prize}** has ended with no valid entries.` });
-                }
+                try { await logEvent({ client, guildId, eventType: EVENT_TYPES.GIVEAWAY_WINNER, data: { description: `Giveaway ended with ${winners.length} winner(s)`, channelId: channel.id } }); } catch (error) { logger.debug('Error logging giveaway winner:', error); }
             } catch (error) { logger.error('Error processing giveaway:', error); }
         }
     } catch (error) { logger.error('Error checking giveaways:', error); }
