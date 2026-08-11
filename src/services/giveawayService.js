@@ -1,5 +1,3 @@
-// giveawayService.js
-
 import {
     ActionRowBuilder,
     ButtonBuilder,
@@ -19,6 +17,14 @@ const GIVEAWAY_INTERACTION_COOLDOWN = 1000;
 
 function getGiveawayInteractionKey(userId, giveawayId) {
     return `giveaway:${userId}:${giveawayId}`;
+}
+
+function addDivider(container) {
+    container.addSeparatorComponents(
+        new SeparatorBuilder()
+            .setDivider(true)
+            .setSpacing(SeparatorSpacingSize.Small),
+    );
 }
 
 export function parseDuration(durationString) {
@@ -52,61 +58,40 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
         const description = giveaway.description?.trim();
         const endTime = Number(giveaway.endsAt ?? giveaway.endTime);
         const entryCount = Array.isArray(giveaway.participants) ? giveaway.participants.length : 0;
-
+        const selectedWinners = winners.length > 0 ? winners : (Array.isArray(giveaway.winnerIds) ? giveaway.winnerIds : []);
         const container = new ContainerBuilder();
 
-        // Components V2 TextDisplay supports Discord Markdown headings, giving the giveaway
-        // name the large title treatment without using an EmbedBuilder or colour bar.
-        container.addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(`## ${giveaway.prize}`),
-        );
-
-        if (description) {
-            container.addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(description),
-            );
-        }
-
-        // This is Discord's real Components V2 Separator component — not Unicode text.
-        container.addSeparatorComponents(
-            new SeparatorBuilder()
-                .setDivider(true)
-                .setSpacing(SeparatorSpacingSize.Small),
-        );
-
-        const details = [];
-        if (giveaway.hostId) details.push(`**Host:** <@${giveaway.hostId}>`);
-        details.push(`**Winners:** ${giveaway.winnerCount ?? 1}`);
-        details.push(`**Entries:** ${entryCount}`);
-
-        container.addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(details.join('\n')),
-        );
-
-        container.addSeparatorComponents(
-            new SeparatorBuilder()
-                .setDivider(true)
-                .setSpacing(SeparatorSpacingSize.Small),
-        );
-
         if (isEnded) {
-            const winnerDisplay = winners.length > 0
-                ? winners.map((id) => `<@${id}>`).join(', ')
-                : 'No valid entries';
-            container.addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(`**Winners:** ${winnerDisplay}`),
-            );
-        } else if (Number.isFinite(endTime) && endTime > 0) {
-            container.addTextDisplayComponents(
-                new TextDisplayBuilder().setContent(`**Ends:** <t:${Math.floor(endTime / 1000)}:R>`),
-            );
-        } else {
-            container.addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('**Ends:** Unknown'),
-            );
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent('## Winners Selected'));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Prize:** ${giveaway.prize || 'Unknown Prize'}`));
+            if (description) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Description:** ${description}`));
+            addDivider(container);
+            const endedAt = giveaway.endedAt ? Date.parse(giveaway.endedAt) : Date.now();
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Ended:** <t:${Math.floor(endedAt / 1000)}:R>`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Entries:** ${entryCount} Participant${entryCount === 1 ? '' : 's'}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Host:** ${giveaway.hostId ? `<@${giveaway.hostId}>` : 'None'}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Winners:** ${giveaway.winnerCount ?? 1}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Giveaway Winners:** ${selectedWinners.length > 0 ? selectedWinners.map((id) => `<@${id}>`).join(', ') : 'No valid entries'}`));
+            addDivider(container);
+            container.addActionRowComponents(createGiveawayButtons(true, giveaway.messageId));
+            return container;
         }
 
-        container.addActionRowComponents(createGiveawayButtons(isEnded));
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${giveaway.prize}`));
+        if (description) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(description));
+        addDivider(container);
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent([
+            giveaway.hostId ? `**Host:** <@${giveaway.hostId}>` : null,
+            `**Winners:** ${giveaway.winnerCount ?? 1}`,
+            `**Entries:** ${entryCount}`,
+        ].filter(Boolean).join('\n')));
+        addDivider(container);
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
+            Number.isFinite(endTime) && endTime > 0
+                ? `**Ends:** <t:${Math.floor(endTime / 1000)}:R>`
+                : '**Ends:** Unknown',
+        ));
+        container.addActionRowComponents(createGiveawayButtons(false, giveaway.messageId));
         return container;
     } catch (error) {
         logger.error('Error creating giveaway Components V2:', error);
@@ -114,25 +99,22 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
     }
 }
 
-export function createGiveawayButtons(ended = false) {
-    try {
-        const row = new ActionRowBuilder();
-        if (ended) {
-            row.addComponents(
-                new ButtonBuilder().setCustomId('giveaway_reroll').setLabel('🎲 Reroll').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('giveaway_view').setLabel('👁️ View Winners').setStyle(ButtonStyle.Secondary),
-            );
-        } else {
-            row.addComponents(
-                new ButtonBuilder().setCustomId('giveaway_join').setLabel('🎉 Join').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('giveaway_end').setLabel('🛑 End').setStyle(ButtonStyle.Secondary),
-            );
-        }
-        return row;
-    } catch (error) {
-        logger.error('Error creating giveaway buttons:', error);
-        throw new TitanBotError('Failed to create giveaway buttons', ErrorTypes.UNKNOWN, 'An internal error occurred while creating giveaway buttons.', { error: error.message });
+export function createGiveawayButtons(ended = false, messageId = null) {
+    const row = new ActionRowBuilder();
+    if (ended) {
+        row.addComponents(
+            new ButtonBuilder().setCustomId('giveaway_reroll').setLabel('🎲 Reroll').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('giveaway_view').setLabel('👁️ View Winners').setStyle(ButtonStyle.Secondary),
+        );
+    } else {
+        row.addComponents(
+            new ButtonBuilder().setCustomId('giveaway_join').setLabel('🎉 Join').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`giveaway_participants:${messageId || 'unknown'}`).setLabel('👥 View Participants').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`giveaway_kick:${messageId || 'unknown'}`).setLabel('🚫 Kick Participant').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('giveaway_end').setLabel('🛑 End').setStyle(ButtonStyle.Secondary),
+        );
     }
+    return row;
 }
 
 export function selectWinners(participants, winnerCount) {
@@ -178,20 +160,17 @@ export async function checkGiveaways(client) {
                 if (!channel) continue;
                 const message = await channel.messages.fetch(messageId).catch(() => null);
                 if (!message) continue;
-                const participants = giveaway.participants || [];
+                const participants = Array.isArray(giveaway.participants) ? giveaway.participants : [];
                 const winners = selectWinners(participants, giveaway.winnerCount || 1);
-                await message.edit({
-                    components: [createGiveawayEmbed(giveaway, 'ended', winners)],
-                    flags: 32768,
-                });
                 giveaway.ended = true;
                 giveaway.isEnded = true;
                 giveaway.winnerIds = winners;
                 giveaway.endedAt = new Date().toISOString();
+                await message.edit({ components: [createGiveawayEmbed(giveaway, 'ended', winners)] });
                 await markGiveawayEnded(client, giveawayId, giveaway);
                 if (winners.length > 0) {
                     const winnerMentions = winners.map((id) => `<@${id}>`).join(', ');
-                    await channel.send({ content: `🎉 Congratulations ${winnerMentions}! You won the **${giveaway.prize || 'giveaway'}**! Please contact <@${giveaway.hostId}> to claim your prize.` });
+                    await channel.send({ content: `🎉 Congratulations ${winnerMentions}! You won the **${giveaway.prize || 'giveaway'}**!${giveaway.hostId ? ` Please contact <@${giveaway.hostId}> to claim your prize.` : ''}` });
                     try { await logEvent({ client, guildId, eventType: EVENT_TYPES.GIVEAWAY_WINNER, data: { description: `Giveaway ended with ${winners.length} winner(s)`, channelId: channel.id } }); } catch (error) { logger.debug('Error logging giveaway winner:', error); }
                 } else {
                     await channel.send({ content: `The giveaway for **${giveaway.prize}** has ended with no valid entries.` });
