@@ -14,6 +14,12 @@ import { isCollectorManagedComponent } from '../utils/collectorComponents.js';
 import { ResponseCoordinator } from '../utils/responseCoordinator.js';
 import { enforceDefaultCommandPermissions } from '../utils/permissionGuard.js';
 
+const ADMIN_COMMANDS = new Set(['commands', 'permission', 'configwizard', 'logging', 'app-admin', 'serverstats', 'channelinfo', 'roleinfo', 'admins']);
+
+function isAdminCommand(command) {
+  return command?.category?.toLowerCase?.() === 'moderation' || ADMIN_COMMANDS.has(command?.data?.name?.toLowerCase?.());
+}
+
 function withTraceContext(context = {}, traceContext = {}) {
   return { traceId: traceContext.traceId, guildId: context.guildId || traceContext.guildId, userId: context.userId || traceContext.userId, command: context.commandName || traceContext.command, ...context };
 }
@@ -36,6 +42,15 @@ export default {
             validateChatInputPayloadOrThrow(interaction, withTraceContext({ type: 'command_input_validation', commandName: interaction.commandName }, interactionTraceContext));
             const command = client.commands.get(interaction.commandName);
             if (!command) throw createError(`No command matching ${interaction.commandName} was found.`, ErrorTypes.CONFIGURATION, 'Sorry, that command does not exist.', withTraceContext({ commandName: interaction.commandName }, interactionTraceContext));
+
+            // Admin/moderation commands share an optional `visible` switch.
+            // Default is private, so moderation confirmations are ephemeral unless
+            // the moderator explicitly chooses visible:true.
+            if (isAdminCommand(command)) {
+              interaction._luxeAdminCommand = true;
+              interaction._luxeVisible = interaction.options.getBoolean('visible') === true;
+            }
+
             const abuseProtection = await enforceAbuseProtection(interaction, command, interaction.commandName);
             if (!abuseProtection.allowed) {
               const formattedCooldown = formatCooldownDuration(abuseProtection.remainingMs);
