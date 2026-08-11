@@ -1,33 +1,56 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, SeparatorSpacingSize, MessageFlags } from 'discord.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import { createEmbed } from '../../utils/embeds.js';
-import { getCommandAccessSnapshot } from '../../services/commandAccessService.js';
+
+const ADMIN_CATEGORIES = new Set(['moderation']);
+const ADMIN_COMMANDS = new Set(['commands', 'permission', 'configwizard', 'logging', 'app-admin', 'serverstats', 'channelinfo', 'roleinfo']);
+
+function isAdminCommand(command) {
+  const name = command?.data?.name?.toLowerCase();
+  const category = command?.category?.toLowerCase();
+  return !!name && (ADMIN_CATEGORIES.has(category) || ADMIN_COMMANDS.has(name));
+}
+
+function buildPanel(title, groups) {
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## ${title}`))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+  for (const [category, commands] of groups) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${category}**\n${commands.map(c => `\`/${c}\``).join(' • ')}`));
+    container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+  }
+  return container;
+}
 
 export default {
-  data: new SlashCommandBuilder().setName('commands').setDescription('Browse every Luxe command').setDefaultMemberPermissions(PermissionFlagsBits.Administrator).setDMPermission(false)
-    .addSubcommand(s => s.setName('list').setDescription('Show every command, including admin commands'))
-    .addSubcommand(s => s.setName('dashboard').setDescription('Open the command access dashboard'))
-    .addSubcommand(s => s.setName('disable').setDescription('Disable a command or category').addStringOption(o => o.setName('scope').setDescription('Command or category').setRequired(true).addChoices({ name: 'Category', value: 'category' }, { name: 'Command', value: 'command' })).addStringOption(o => o.setName('target').setDescription('Target name').setRequired(true)))
-    .addSubcommand(s => s.setName('enable').setDescription('Enable a command or category').addStringOption(o => o.setName('scope').setDescription('Command or category').setRequired(true).addChoices({ name: 'Category', value: 'category' }, { name: 'Command', value: 'command' })).addStringOption(o => o.setName('target').setDescription('Target name').setRequired(true))),
+  data: new SlashCommandBuilder()
+    .setName('commands')
+    .setDescription('Browse Luxe commands by access level')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false)
+    .addStringOption(o => o.setName('type').setDescription('Which commands to show').setRequired(true).addChoices(
+      { name: 'All', value: 'all' },
+      { name: 'Admin', value: 'admin' },
+      { name: 'Public', value: 'public' },
+    )),
   category: 'Core',
   async execute(interaction, config, client) {
-    const sub = interaction.options.getSubcommand();
-    if (sub === 'list') {
-      const snapshot = getCommandAccessSnapshot(client, config || {});
-      const groups = snapshot.categories.map(c => `**${c.icon} ${c.displayName}**\n${c.commands.map(x => `\`/${x.name}\``).join(' • ')}`).join('\n\n');
-      return InteractionHelper.safeReply(interaction, { embeds: [createEmbed({ title: '📋 All Luxe Commands', description: groups || 'No commands loaded.' })] });
+    const type = interaction.options.getString('type', true);
+    const commands = [...client.commands.values()].filter(c => c?.data?.name);
+    const filtered = commands.filter(command => {
+      const admin = isAdminCommand(command);
+      if (type === 'admin') return admin;
+      if (type === 'public') return !admin;
+      return true;
+    });
+    const groups = new Map();
+    for (const command of filtered) {
+      const category = command.category || 'Other';
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category).push(command.data.name);
     }
-    if (sub === 'dashboard') return InteractionHelper.safeReply(interaction, { embeds: [createEmbed({ title: '🛠️ Command Dashboard', description: 'Use `/commands disable` or `/commands enable` to manage commands and categories.' })] });
-    const scope = interaction.options.getString('scope', true).toLowerCase();
-    const target = interaction.options.getString('target', true).toLowerCase();
-    const { disableCommand, enableCommand, disableCategory, enableCategory, resolveCategoryChoice } = await import('../../services/commandAccessService.js');
-    if (scope === 'category') {
-      const category = resolveCategoryChoice(client, target);
-      if (!category) throw new Error(`Unknown category: ${target}`);
-      if (sub === 'disable') await disableCategory(client, interaction.guildId, category.key); else await enableCategory(client, interaction.guildId, category.key);
-      return InteractionHelper.safeReply(interaction, { embeds: [createEmbed({ title: sub === 'disable' ? '🚫 Category Disabled' : '✅ Category Enabled', description: `**${category.displayName}** has been ${sub === 'disable' ? 'disabled' : 'enabled'}.` })] });
-    }
-    if (sub === 'disable') await disableCommand(client, interaction.guildId, target); else await enableCommand(client, interaction.guildId, target);
-    return InteractionHelper.safeReply(interaction, { embeds: [createEmbed({ title: sub === 'disable' ? '🚫 Command Disabled' : '✅ Command Enabled', description: `\`/${target}\` has been ${sub === 'disable' ? 'disabled' : 'enabled'}.` })] });
+    const sorted = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([category, names]) => [category, names.sort()]);
+    const title = type === 'admin' ? '🛡️ Admin Commands' : type === 'public' ? '📖 Public Commands' : '📋 All Luxe Commands';
+    const container = buildPanel(title, sorted.length ? sorted : [['Commands', ['No commands loaded.']]]);
+    return InteractionHelper.safeReply(interaction, { components: [container], flags: MessageFlags.IsComponentsV2 });
   },
 };
