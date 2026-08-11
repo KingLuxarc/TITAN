@@ -49,13 +49,12 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
         const description = giveaway.description?.trim();
         const lines = [];
 
-        if (description) lines.push(description);
-        lines.push(GIVEAWAY_DIVIDER);
+        if (description) lines.push(description, '');
+        lines.push(GIVEAWAY_DIVIDER, '');
 
         if (giveaway.hostId) lines.push(`**Host:** <@${giveaway.hostId}>`);
         lines.push(`**Winners:** ${giveaway.winnerCount}`);
-        lines.push(`**Entries:** ${giveaway.participants?.length || 0}`);
-        lines.push(GIVEAWAY_DIVIDER);
+        lines.push(`**Entries:** ${giveaway.participants?.length || 0}`, '', GIVEAWAY_DIVIDER, '');
 
         if (isEnded) {
             const winnerDisplay = winners.length > 0 ? winners.map((id) => `<@${id}>`).join(', ') : 'No valid entries';
