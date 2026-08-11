@@ -2,28 +2,58 @@
 import { PermissionFlagsBits } from 'discord.js';
 import { logger } from './logger.js';
 import { replyUserError, ErrorTypes } from './errorHandler.js';
+
 export function getCommandDefaultPermissions(commandData) { const json = commandData?.toJSON?.() ?? commandData; const value = json?.default_member_permissions; if (value == null || value === '0') return null; return BigInt(value); }
 function normalizeRoleId(role) { if (!role) return null; if (typeof role === 'string') return role; if (typeof role === 'object' && role.id) return role.id; return null; }
 function isModerationCategory(category) { return category?.toLowerCase?.() === 'moderation'; }
 export function memberHasConfiguredModeratorRole(member, guildConfig) { if (!member || !guildConfig) return false; const modRoleId = normalizeRoleId(guildConfig.modRole); return Boolean(modRoleId && member.roles.cache.has(modRoleId)); }
-export function memberHasModerationCommandAccess(member, guildConfig, requiredPermissions = null) { if (!member) return false; if (member.guild?.ownerId === member.id) return true; if (member.permissions.has(PermissionFlagsBits.Administrator)) return true; if (requiredPermissions != null && member.permissions.has(requiredPermissions)) return true; return memberHasConfiguredModeratorRole(member, guildConfig); }
-export function memberMeetsCommandPermissions(member, permissionBitfield, options = {}) { if (permissionBitfield == null) return true; if (!member) return false; const { guildConfig = null, commandCategory = null } = options; if (isModerationCategory(commandCategory)) return memberHasModerationCommandAccess(member, guildConfig, permissionBitfield); if (member.guild?.ownerId === member.id) return true; return member.permissions.has(permissionBitfield); }
-export async function checkModerationPermissions(interaction, guildConfig, requiredPermissions, errorMessage = 'You do not have permission to use this command.') { if (memberHasModerationCommandAccess(interaction.member, guildConfig, requiredPermissions)) return true; await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: errorMessage, context: { source: 'permissionGuard.checkModerationPermissions' } }); logger.warn('[PERMISSION_DENIED] Moderation command blocked', { userId: interaction.user?.id, guildId: interaction.guildId, command: interaction.commandName }); return false; }
-export async function enforceDefaultCommandPermissions(interaction, command, context = {}) { const requiredPermissions = getCommandDefaultPermissions(command?.data); if (requiredPermissions == null) return true; const member = interaction.member; if (memberMeetsCommandPermissions(member, requiredPermissions, { guildConfig: context.guildConfig ?? null, commandCategory: command?.category ?? null })) return true; const commandName = command?.data?.name ?? interaction.commandName ?? 'command'; await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: 'You do not have permission to use this command.', context: { source: context.source ?? 'permissionGuard.enforceDefaultCommandPermissions', commandName, requiredPermissions: requiredPermissions.toString() } }); return false; }
 
-export function hasBotAccess(member, guildConfig) {
+// Admin-command access is intentionally separate from normal Discord permissions:
+// server owners/administrators always have access; otherwise a role explicitly
+// selected in /permissions is required. This applies to the whole Moderation category.
+export function memberHasModerationCommandAccess(member, guildConfig) {
   if (!member) return false;
   if (member.guild?.ownerId === member.id) return true;
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
   const roles = Array.isArray(guildConfig?.botAccessRoles) ? guildConfig.botAccessRoles : [];
-  if (roles.length === 0) return true;
-  return roles.some((roleId) => member.roles.cache.has(roleId));
+  return roles.length > 0 && roles.some((roleId) => member.roles.cache.has(roleId));
 }
-export async function enforceBotAccess(interaction, guildConfig) {
-  if (!interaction.inGuild?.() || hasBotAccess(interaction.member, guildConfig)) return true;
-  await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: 'You do not have a role that is allowed to use Luxe. Ask a server administrator to add your role with `/permissions`.' });
+
+export function memberMeetsCommandPermissions(member, permissionBitfield, options = {}) {
+  if (!member) return false;
+  const { guildConfig = null, commandCategory = null } = options;
+  if (isModerationCategory(commandCategory)) return memberHasModerationCommandAccess(member, guildConfig);
+  if (permissionBitfield == null) return true;
+  if (member.guild?.ownerId === member.id) return true;
+  return member.permissions.has(permissionBitfield);
+}
+
+export async function checkModerationPermissions(interaction, guildConfig, requiredPermissions, errorMessage = 'You do not have permission to use this admin command.') {
+  if (memberHasModerationCommandAccess(interaction.member, guildConfig)) return true;
+  await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: errorMessage, context: { source: 'permissionGuard.checkModerationPermissions' } });
+  logger.warn('[PERMISSION_DENIED] Moderation command blocked', { userId: interaction.user?.id, guildId: interaction.guildId, command: interaction.commandName });
   return false;
 }
+
+export async function enforceDefaultCommandPermissions(interaction, command, context = {}) {
+  const commandCategory = command?.category ?? null;
+  if (isModerationCategory(commandCategory)) {
+    if (memberHasModerationCommandAccess(interaction.member, context.guildConfig ?? null)) return true;
+    await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: 'You do not have an admin/moderation role configured for Luxe. Ask a server administrator to add your role with `/permissions`.', context: { source: context.source ?? 'permissionGuard.enforceDefaultCommandPermissions', commandName: interaction.commandName } });
+    return false;
+  }
+
+  const requiredPermissions = getCommandDefaultPermissions(command?.data);
+  if (requiredPermissions == null) return true;
+  const member = interaction.member;
+  if (memberMeetsCommandPermissions(member, requiredPermissions, { guildConfig: context.guildConfig ?? null, commandCategory })) return true;
+  const commandName = command?.data?.name ?? interaction.commandName ?? 'command';
+  await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: 'You do not have permission to use this command.', context: { source: context.source ?? 'permissionGuard.enforceDefaultCommandPermissions', commandName, requiredPermissions: requiredPermissions.toString() } });
+  return false;
+}
+
+export function hasBotAccess(member, guildConfig) { if (!member) return false; if (member.guild?.ownerId === member.id) return true; if (member.permissions.has(PermissionFlagsBits.Administrator)) return true; const roles = Array.isArray(guildConfig?.botAccessRoles) ? guildConfig.botAccessRoles : []; if (roles.length === 0) return true; return roles.some((roleId) => member.roles.cache.has(roleId)); }
+export async function enforceBotAccess(interaction, guildConfig) { if (!interaction.inGuild?.() || hasBotAccess(interaction.member, guildConfig)) return true; await replyUserError(interaction, { type: ErrorTypes.PERMISSION, message: 'You do not have a role that is allowed to use Luxe. Ask a server administrator to add your role with `/permissions`.' }); return false; }
 export function isAdmin(member) { return Boolean(member?.permissions.has(PermissionFlagsBits.Administrator)); }
 export function isModerator(member, guildConfig = null) { if (!member) return false; if (memberHasConfiguredModeratorRole(member, guildConfig)) return true; return member.permissions.has([PermissionFlagsBits.Administrator, PermissionFlagsBits.ManageGuild]); }
 export function hasPermission(member, permissions) { return Boolean(member?.permissions.has(permissions)); }
