@@ -7,18 +7,13 @@ function buildPage(guild, bans, page) {
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
   const pageBans = bans.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
   const container = new ContainerBuilder();
-
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`## 🛡️ ${guild.name} Bans:`));
   container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
-
-  const entries = pageBans.length
-    ? pageBans.map((ban) => {
-        const reason = ban.reason?.trim() || 'No reason provided';
-        return `**👥 Person:** <@${ban.user.id}> (${ban.user.id})\n**⁉️ Reason:** ${reason}`;
-      }).join('\n\n')
-    : 'There are no banned members.';
-
-  // Keep all seven entries in one TextDisplay so the Components V2 container stays within Discord's component limit.
+  const entries = pageBans.length ? pageBans.map((ban) => {
+    const user = ban.user;
+    const reason = ban.reason?.trim() || 'No reason provided';
+    return `**👥 Person:** <@${user?.id || 'unknown'}> (${user?.id || 'Unknown ID'})\n**⁉️ Reason:** ${reason}`;
+  }).join('\n\n') : 'There are no banned members.';
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(entries));
   container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
   container.addActionRowComponents(new ActionRowBuilder().addComponents(
@@ -36,11 +31,11 @@ export default {
   async execute(interaction) {
     if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) return interaction.reply({ content: 'You need Ban Members permission.', flags: MessageFlags.Ephemeral });
     try {
-      const bans = [...await interaction.guild.bans.fetch()];
+      const fetched = await interaction.guild.bans.fetch();
+      const bans = [...fetched.values()];
       await interaction.reply({ components: [buildPage(interaction.guild, bans, 0)], flags: MessageFlags.IsComponentsV2 });
     } catch (error) {
       await interaction.reply({ content: 'I could not retrieve this server\'s bans. Make sure Luxe has the required ban permissions.', flags: MessageFlags.Ephemeral }).catch(() => {});
-      throw error;
     }
   },
 };
