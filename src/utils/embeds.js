@@ -75,7 +75,6 @@ export function createEmbed({ title = '', description = '', color = null, fields
   const embed = new EmbedBuilder();
   if (title && typeof title === 'string') embed.setTitle(title.substring(0, 256));
   if (description && typeof description === 'string') embed.setDescription(description.substring(0, 4096));
-  // `color` is intentionally ignored: all Luxe embeds are colour-strip free.
   void color;
 
   if (Array.isArray(fields) && fields.length > 0) {
@@ -124,7 +123,7 @@ export const USER_ERROR_TITLES = {
   validation: 'Invalid Input', permission: 'Permission Denied', configuration: 'Configuration Error', database: 'Database Error', network: 'Network Error', discord_api: 'Discord API Error', user_input: 'Input Error', rate_limit: 'Too Fast', unknown: 'Something Went Wrong',
 };
 
-function buildUserErrorEmbed(errorType, description = '', options = {}) {
+export function buildUserErrorEmbed(errorType, description = '', options = {}) {
   const type = errorType || 'unknown';
   const title = options.titleOverride || USER_ERROR_TITLES[type] || USER_ERROR_TITLES.unknown;
   const body = description ? String(description).trim() : undefined;
