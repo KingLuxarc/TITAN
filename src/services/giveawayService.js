@@ -8,24 +8,19 @@ import { checkRateLimit, getRateLimitStatus } from '../utils/rateLimiter.js';
 import { logEvent, EVENT_TYPES } from './loggingService.js';
 
 const GIVEAWAY_INTERACTION_COOLDOWN = 1000;
-// Discord Markdown horizontal rule. Do NOT replace this with a Unicode line.
-const GIVEAWAY_DIVIDER = '---';
+const GIVEAWAY_DIVIDER = '━━━━━━━━━━━━━━━━━━━━━━━━';
 
 function getGiveawayInteractionKey(userId, giveawayId) {
     return `giveaway:${userId}:${giveawayId}`;
 }
 
 export function parseDuration(durationString) {
-    if (!durationString || typeof durationString !== 'string') {
-        throw new TitanBotError('Invalid duration format provided', ErrorTypes.VALIDATION, 'Please provide a valid duration (e.g., 1h, 30m, 5d, 10s).', { durationString });
-    }
+    if (!durationString || typeof durationString !== 'string') throw new TitanBotError('Invalid duration format provided', ErrorTypes.VALIDATION, 'Please provide a valid duration (e.g., 1h, 30m, 5d, 10s).', { durationString });
     const match = durationString.trim().match(/^(\d+)([hmds])$/i);
     if (!match) throw new TitanBotError(`Invalid duration format: ${durationString}`, ErrorTypes.VALIDATION, 'Invalid duration format. Use: 1h, 30m, 5d, 10s (min: 10s, max: 30d)', { input: durationString });
-
     const amount = parseInt(match[1], 10);
     const unit = match[2].toLowerCase();
     if (amount <= 0 || amount > 999) throw new TitanBotError(`Duration amount out of range: ${amount}`, ErrorTypes.VALIDATION, 'Duration amount must be between 1 and 999.', { amount, unit });
-
     const multipliers = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
     const ms = amount * multipliers[unit];
     if (ms > 30 * 86400000) throw new TitanBotError('Duration exceeds maximum', ErrorTypes.VALIDATION, 'Maximum duration is 30 days.');
@@ -68,9 +63,10 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
             lines.push('**Ends:** Unknown');
         }
 
-        // Deliberately do not call setColor(): a giveaway should have no embed colour strip.
+        // Discord embeds do not support Markdown horizontal rules in descriptions.
+        // Use a visual divider glyph for a true line instead of literal "---" text.
         return new EmbedBuilder()
-            .setTitle(giveaway.prize)
+            .setTitle(`**${giveaway.prize}**`)
             .setDescription(lines.join('\n'));
     } catch (error) {
         logger.error('Error creating giveaway embed:', error);
@@ -125,12 +121,7 @@ export async function endGiveaway(client, giveaway, guildId, endedBy) {
     if (giveaway.ended === true || giveaway.isEnded === true) throw new TitanBotError('Giveaway already ended', ErrorTypes.VALIDATION, 'This giveaway has already ended.');
     const participants = giveaway.participants || [];
     const winners = selectWinners(participants, giveaway.winnerCount || 1);
-    return {
-        success: true,
-        giveaway: { ...giveaway, ended: true, isEnded: true, winnerIds: winners, endedAt: new Date().toISOString(), endedBy, participantCount: participants.length },
-        winners,
-        participantCount: participants.length,
-    };
+    return { success: true, giveaway: { ...giveaway, ended: true, isEnded: true, winnerIds: winners, endedAt: new Date().toISOString(), endedBy, participantCount: participants.length }, winners, participantCount: participants.length };
 }
 
 export async function checkGiveaways(client) {
@@ -147,33 +138,22 @@ export async function checkGiveaways(client) {
                 if (!channel) continue;
                 const message = await channel.messages.fetch(messageId).catch(() => null);
                 if (!message) continue;
-
                 const participants = giveaway.participants || [];
                 const winners = selectWinners(participants, giveaway.winnerCount || 1);
                 await message.edit({ embeds: [createGiveawayEmbed(giveaway, 'ended', winners)], components: [createGiveawayButtons(true)] });
-
                 giveaway.ended = true;
                 giveaway.isEnded = true;
                 giveaway.winnerIds = winners;
                 giveaway.endedAt = new Date().toISOString();
                 await markGiveawayEnded(client, giveawayId, giveaway);
-
                 if (winners.length > 0) {
                     const winnerMentions = winners.map((id) => `<@${id}>`).join(', ');
                     await channel.send({ content: `🎉 Congratulations ${winnerMentions}! You won the **${giveaway.prize || 'giveaway'}**! Please contact <@${giveaway.hostId}> to claim your prize.` });
-                    try {
-                        await logEvent({ client, guildId, eventType: EVENT_TYPES.GIVEAWAY_WINNER, data: { description: `Giveaway ended with ${winners.length} winner(s)`, channelId: channel.id } });
-                    } catch (error) {
-                        logger.debug('Error logging giveaway winner:', error);
-                    }
+                    try { await logEvent({ client, guildId, eventType: EVENT_TYPES.GIVEAWAY_WINNER, data: { description: `Giveaway ended with ${winners.length} winner(s)`, channelId: channel.id } }); } catch (error) { logger.debug('Error logging giveaway winner:', error); }
                 } else {
                     await channel.send({ content: `The giveaway for **${giveaway.prize}** has ended with no valid entries.` });
                 }
-            } catch (error) {
-                logger.error('Error processing giveaway:', error);
-            }
+            } catch (error) { logger.error('Error processing giveaway:', error); }
         }
-    } catch (error) {
-        logger.error('Error checking giveaways:', error);
-    }
+    } catch (error) { logger.error('Error checking giveaways:', error); }
 }
