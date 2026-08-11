@@ -7,11 +7,12 @@ import {
     UserSelectMenuBuilder,
     TextDisplayBuilder,
 } from 'discord.js';
+import { PermissionFlagsBits } from 'discord.js';
+import { logger } from '../utils/logger.js';
 import { getGuildGiveaways, saveGiveaway, isGiveawayEnded } from '../utils/giveaways.js';
 import { Mutex } from '../utils/mutex.js';
 import { selectWinners, isUserRateLimited, recordUserInteraction, createGiveawayEmbed, addGiveawayDivider } from '../services/giveawayService.js';
 import { logEvent, EVENT_TYPES } from '../services/loggingService.js';
-import { PermissionFlagsBits } from 'discord.js';
 
 const V2 = MessageFlags.IsComponentsV2;
 const EPHEMERAL_V2 = MessageFlags.Ephemeral | V2;
