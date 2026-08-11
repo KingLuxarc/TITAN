@@ -1,9 +1,9 @@
 import { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } from 'discord.js';
-import { errorEmbed, successEmbed } from '../../utils/embeds.js';
+import { successEmbed } from '../../utils/embeds.js';
 import { logger } from '../../utils/logger.js';
 import { TitanBotError, ErrorTypes, handleInteractionError } from '../../utils/errorHandler.js';
 import { saveGiveaway } from '../../utils/giveaways.js';
-import { parseDuration, validatePrize, validateWinnerCount, createGiveawayEmbed, createGiveawayButtons } from '../../services/giveawayService.js';
+import { parseDuration, validatePrize, validateWinnerCount, createGiveawayEmbed } from '../../services/giveawayService.js';
 import { logEvent, EVENT_TYPES } from '../../services/loggingService.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 
@@ -75,10 +75,12 @@ export default {
                 createdAt: new Date().toISOString(),
             };
 
-            const embed = createGiveawayEmbed(initialGiveawayData, 'active');
-            const row = createGiveawayButtons(false);
+            const components = createGiveawayEmbed(initialGiveawayData, 'active');
 
-            const giveawayMessage = await targetChannel.send({ embeds: [embed], components: [row] });
+            const giveawayMessage = await targetChannel.send({
+                components: [components],
+                flags: MessageFlags.IsComponentsV2,
+            });
 
             initialGiveawayData.messageId = giveawayMessage.id;
             const saved = await saveGiveaway(interaction.client, interaction.guildId, initialGiveawayData);
