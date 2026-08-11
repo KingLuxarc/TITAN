@@ -14,10 +14,12 @@ export default {
     if (index >= 0) roles.splice(index, 1); else roles.push(roleId);
     await setConfigValue(interaction.client, interaction.guildId, 'botAccessRoles', roles, interaction.user.id);
     const c = new ContainerBuilder();
-    c.addTextDisplayComponents(new TextDisplayBuilder().setContent('## 🔐 Luxe Bot Permissions'));
+    c.addTextDisplayComponents(new TextDisplayBuilder().setContent('## 🔐 Luxe Admin Command Permissions'));
     c.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
-    c.addTextDisplayComponents(new TextDisplayBuilder().setContent(index >= 0 ? `❌ Removed ${role} from Luxe access.` : `✅ Added ${role} to Luxe access.`));
-    c.addTextDisplayComponents(new TextDisplayBuilder().setContent(roles.length ? `**Allowed roles:** ${roles.map((id) => `<@&${id}>`).join(', ')}` : '**Allowed roles:** Everyone'));
+    c.addTextDisplayComponents(new TextDisplayBuilder().setContent(index >= 0 ? `❌ Removed ${role} from **admin/moderation command** access.` : `✅ Added ${role} to **admin/moderation command** access.`));
+    c.addTextDisplayComponents(new TextDisplayBuilder().setContent(roles.length ? `**🛡️ Allowed admin roles:** ${roles.map((id) => `<@&${id}>`).join(', ')}` : '**🛡️ Allowed admin roles:** None configured'));
+    c.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    c.addTextDisplayComponents(new TextDisplayBuilder().setContent('Normal, fun, utility, and other public commands remain available to everyone. Server administrators always retain access.'));
     await interaction.update({ components: [c], flags: MessageFlags.IsComponentsV2 });
   },
 };
