@@ -37,7 +37,6 @@ class LuxeBot extends Client {
   async start() {
     try {
       startupLog('Starting bot...');
-
       startupLog('Initializing storage...');
       const dbInstance = await initializeDatabase();
       this.db = dbInstance.db;
@@ -55,15 +54,11 @@ class LuxeBot extends Client {
 
       startupLog('Loading event and interaction handlers...');
       await this.loadHandlers();
-
       startupLog('Logging into Discord...');
       await this.login(this.config.bot.token);
-
       startupLog('Registering slash commands...');
       await this.registerCommands();
-
       this.setupCronJobs();
-
       startupLog(`ONLINE ✅ | ${this.commands.size} commands loaded`);
     } catch (error) {
       logger.error('Failed to start bot:', error);
@@ -73,21 +68,17 @@ class LuxeBot extends Client {
 
   setupCronJobs() {
     cron.schedule('0 6 * * *', () => checkBirthdays(this));
-    cron.schedule('* * * * *', () => checkGiveaways(this));
+    // Check every 10 seconds so giveaways don't wait for the old once-per-minute tick.
+    cron.schedule('*/10 * * * * *', () => checkGiveaways(this));
   }
 
   async loadHandlers() {
     const handlers = ['events', 'interactions'];
-
     for (const name of handlers) {
       try {
         const module = await import(`./handlers/${name}.js`);
         const loader = module.default;
-
-        if (typeof loader !== 'function') {
-          throw new Error(`Invalid loader export from ${name}.js`);
-        }
-
+        if (typeof loader !== 'function') throw new Error(`Invalid loader export from ${name}.js`);
         await loader(this);
         startupLog(`Loaded ${name}`);
       } catch (error) {
@@ -99,36 +90,17 @@ class LuxeBot extends Client {
 
   async registerCommands() {
     const { clientId, guildId } = this.config.bot;
-
-    if (!clientId) {
-      throw new Error('CLIENT_ID is required.');
-    }
-
-    if (!guildId) {
-      throw new Error('GUILD_ID is required for the current single-server setup.');
-    }
-
-    await registerSlashCommands(this, {
-      clientId,
-      guildId,
-      multiGuild: false,
-    });
+    if (!clientId) throw new Error('CLIENT_ID is required.');
+    if (!guildId) throw new Error('GUILD_ID is required for the current single-server setup.');
+    await registerSlashCommands(this, { clientId, guildId, multiGuild: false });
   }
 
   async shutdown(reason = 'UNKNOWN') {
     shutdownLog(`Bot is shutting down (${reason})...`);
-
     try {
       cron.getTasks().forEach((task) => task.stop());
-
-      if (this.db?.db?.pool) {
-        await this.db.db.pool.end();
-      }
-
-      if (this.isReady()) {
-        this.destroy();
-      }
-
+      if (this.db?.db?.pool) await this.db.db.pool.end();
+      if (this.isReady()) this.destroy();
       shutdownLog('Bot stopped successfully.');
       process.exit(0);
     } catch (error) {
@@ -139,19 +111,15 @@ class LuxeBot extends Client {
 }
 
 const bot = new LuxeBot();
-
 process.on('SIGTERM', () => bot.shutdown('SIGTERM'));
 process.on('SIGINT', () => bot.shutdown('SIGINT'));
-
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught exception:', error);
   bot.shutdown('UNCAUGHT_EXCEPTION');
 });
-
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled rejection:', reason);
 });
-
 bot.start();
 
 export default LuxeBot;
