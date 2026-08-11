@@ -62,16 +62,16 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
         const container = new ContainerBuilder();
 
         if (isEnded) {
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent('## Winners Selected'));
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Prize:** ${giveaway.prize || 'Unknown Prize'}`));
-            if (description) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Description:** ${description}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent('## 🏆 Winners Selected 🏆'));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**🎁 Prize:** ${giveaway.prize || 'Unknown Prize'}`));
+            if (description) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**📝 Description:** ${description}`));
             addDivider(container);
             const endedAt = giveaway.endedAt ? Date.parse(giveaway.endedAt) : Date.now();
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Ended:** <t:${Math.floor(endedAt / 1000)}:R>`));
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Entries:** ${entryCount} Participant${entryCount === 1 ? '' : 's'}`));
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Host:** ${giveaway.hostId ? `<@${giveaway.hostId}>` : 'None'}`));
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Winners:** ${giveaway.winnerCount ?? 1}`));
-            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**Giveaway Winners:** ${selectedWinners.length > 0 ? selectedWinners.map((id) => `<@${id}>`).join(', ') : 'No valid entries'}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**⏰ Ended:** <t:${Math.floor(endedAt / 1000)}:R>`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**👥 Entries:** ${entryCount} Participant${entryCount === 1 ? '' : 's'}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**👑 Host:** ${giveaway.hostId ? `<@${giveaway.hostId}>` : 'None'}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**🏆 Winners:** ${giveaway.winnerCount ?? 1}`));
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`**🎉 Giveaway Winners:** ${selectedWinners.length > 0 ? selectedWinners.map((id) => `<@${id}>`).join(', ') : 'No valid entries'}`));
             addDivider(container);
             container.addActionRowComponents(createGiveawayButtons(true, giveaway.messageId));
             return container;
@@ -81,15 +81,15 @@ export function createGiveawayEmbed(giveaway, status, winners = []) {
         if (description) container.addTextDisplayComponents(new TextDisplayBuilder().setContent(description));
         addDivider(container);
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent([
-            giveaway.hostId ? `**Host:** <@${giveaway.hostId}>` : null,
-            `**Winners:** ${giveaway.winnerCount ?? 1}`,
-            `**Entries:** ${entryCount}`,
+            giveaway.hostId ? `**👑 Host:** <@${giveaway.hostId}>` : null,
+            `**🏆 Winners:** ${giveaway.winnerCount ?? 1}`,
+            `**👥 Entries:** ${entryCount}`,
         ].filter(Boolean).join('\n')));
         addDivider(container);
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
             Number.isFinite(endTime) && endTime > 0
-                ? `**Ends:** <t:${Math.floor(endTime / 1000)}:R>`
-                : '**Ends:** Unknown',
+                ? `**⏰ Ends:** <t:${Math.floor(endTime / 1000)}:R>`
+                : '**⏰ Ends:** Unknown',
         ));
         container.addActionRowComponents(createGiveawayButtons(false, giveaway.messageId));
         return container;
@@ -110,7 +110,6 @@ export function createGiveawayButtons(ended = false, messageId = null) {
         row.addComponents(
             new ButtonBuilder().setCustomId('giveaway_join').setLabel('🎉 Join').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`giveaway_participants:${messageId || 'unknown'}`).setLabel('👥 View Participants').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`giveaway_kick:${messageId || 'unknown'}`).setLabel('🚫 Kick Participant').setStyle(ButtonStyle.Danger),
             new ButtonBuilder().setCustomId('giveaway_end').setLabel('🛑 End').setStyle(ButtonStyle.Secondary),
         );
     }
