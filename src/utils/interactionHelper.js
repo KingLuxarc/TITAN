@@ -14,6 +14,20 @@ function isInteractionUnavailableError(error) {
     return INTERACTION_UNAVAILABLE_CODES.has(error?.code);
 }
 
+function applyAdminVisibility(interaction, options = {}) {
+    if (!interaction?._luxeAdminCommand || !options || typeof options !== 'object') return options;
+    const result = { ...options };
+    const flags = Number(result.flags || 0);
+    if (interaction._luxeVisible === true) {
+        result.flags = flags & ~MessageFlags.Ephemeral;
+        result.ephemeral = false;
+    } else {
+        result.flags = flags | MessageFlags.Ephemeral;
+        result.ephemeral = true;
+    }
+    return result;
+}
+
 function getEmbedData(embed) {
     if (!embed) return null;
     if (typeof embed.toJSON === 'function') return embed.toJSON();
@@ -91,10 +105,11 @@ export class InteractionHelper {
         const originalReply = interaction.reply?.bind(interaction);
         const originalEditReply = interaction.editReply?.bind(interaction);
         const originalFollowUp = interaction.followUp?.bind(interaction);
+        const originalDeferReply = interaction.deferReply?.bind(interaction);
         if (!originalReply || !originalEditReply || !originalFollowUp) return;
 
         interaction.reply = async (options) => {
-            const normalized = convertEmbedsToV2(options);
+            const normalized = applyAdminVisibility(interaction, convertEmbedsToV2(options));
             const coordinator = InteractionHelper.getCoordinator(interaction);
             if (coordinator?.isUsageFinalized()) return coordinator.getReplyMessage();
             if (!interaction.deferred && !interaction.replied) {
@@ -109,8 +124,14 @@ export class InteractionHelper {
             return await originalFollowUp(normalized);
         };
 
-        interaction.followUp = async (options) => originalFollowUp(convertEmbedsToV2(options));
-        interaction.editReply = async (options) => originalEditReply(sanitizeEditReplyOptions(options));
+        interaction.followUp = async (options) => originalFollowUp(applyAdminVisibility(interaction, convertEmbedsToV2(options)));
+        interaction.editReply = async (options) => originalEditReply(sanitizeEditReplyOptions(applyAdminVisibility(interaction, options)));
+        if (originalDeferReply) {
+            interaction.deferReply = async (options = {}) => {
+                if (!interaction._luxeAdminCommand) return originalDeferReply(options);
+                return originalDeferReply(interaction._luxeVisible === true ? {} : { ...options, flags: MessageFlags.Ephemeral });
+            };
+        }
         interaction.__titanResponsePatched = true;
     }
 
@@ -139,6 +160,9 @@ export class InteractionHelper {
             if (coordinator?.isUsageFinalized()) return false;
             if (interaction._isPrefixCommand) return coordinator?.deferLocal() ?? false;
             if (!this.isInteractionValid(interaction)) return false;
+            if (interaction._luxeAdminCommand) {
+                options = interaction._luxeVisible === true ? {} : { ...options, flags: MessageFlags.Ephemeral };
+            }
             await interaction.deferReply(options);
             return true;
         } catch (error) {
@@ -151,7 +175,7 @@ export class InteractionHelper {
 
     static async safeEditReply(interaction, options) {
         try {
-            const normalized = sanitizeEditReplyOptions(options);
+            const normalized = sanitizeEditReplyOptions(applyAdminVisibility(interaction, options));
             const coordinator = this.getCoordinator(interaction);
             if (coordinator?.isUsageFinalized()) return false;
             if (!this.isInteractionValid(interaction)) return false;
@@ -167,7 +191,7 @@ export class InteractionHelper {
             if (error.code === 40060) return false;
             if (error.name === 'InteractionNotReplied' || error.message.includes('not been sent or deferred')) return await this.safeReply(interaction, options);
             if (error.code === 10008) {
-                try { await interaction.followUp(convertEmbedsToV2(options)); return true; } catch { return false; }
+                try { await interaction.followUp(applyAdminVisibility(interaction, convertEmbedsToV2(options))); return true; } catch { return false; }
             }
             logger.error('Failed to edit reply:', error);
             return false;
@@ -176,7 +200,7 @@ export class InteractionHelper {
 
     static async safeReply(interaction, options) {
         try {
-            const normalized = convertEmbedsToV2(options);
+            const normalized = applyAdminVisibility(interaction, convertEmbedsToV2(options));
             const coordinator = this.getCoordinator(interaction);
             if (coordinator?.isUsageFinalized()) return false;
             if (!this.isInteractionValid(interaction)) return false;
@@ -233,7 +257,7 @@ export class InteractionHelper {
     }
 
     static async universalReply(interaction, options) {
-        const normalized = convertEmbedsToV2(options);
+        const normalized = applyAdminVisibility(interaction, convertEmbedsToV2(options));
         const coordinator = this.getCoordinator(interaction);
         if (coordinator?.isUsageFinalized()) return false;
         if (interaction._isPrefixCommand) {
