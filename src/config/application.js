@@ -1,6 +1,6 @@
 import { fileURLToPath } from "url";
 import path from "path";
-import botConfig, { validateConfig } from "./bot.js";
+import botConfig from "./bot.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,15 +16,13 @@ const appConfig = {
     handlers: path.join(__dirname, "../handlers"),
     interactions: path.join(__dirname, "../interactions"),
   },
-
   bot: {
     ...botConfig,
     token: process.env.DISCORD_TOKEN || process.env.TOKEN,
     clientId: process.env.CLIENT_ID,
     guildId: process.env.GUILD_ID,
-    multiGuild: false,
+    multiGuild: process.env.MULTI_GUILD !== "false",
   },
-
   logging: {
     level: process.env.LOG_LEVEL || "info",
     file: {
@@ -34,18 +32,13 @@ const appConfig = {
       maxFiles: "14d",
       zippedArchive: true,
     },
-    console: {
-      enabled: true,
-      colorize: true,
-      timestamp: true,
-    },
+    console: { enabled: true, colorize: true, timestamp: true },
     sentry: {
       enabled: Boolean(process.env.SENTRY_DSN),
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV || "development",
     },
   },
-
   features: {
     economy: false,
     leveling: true,
@@ -67,12 +60,10 @@ const appConfig = {
     fun: true,
     music: false,
   },
-
   env: process.env.NODE_ENV || "development",
   isProduction: process.env.NODE_ENV === "production",
   isDevelopment: process.env.NODE_ENV !== "production",
 };
 
 Object.freeze(appConfig);
-
 export default appConfig;
