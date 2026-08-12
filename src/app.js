@@ -11,19 +11,16 @@ import { loadCommands, registerCommands as registerSlashCommands } from './handl
 
 class LuxeBot extends Client {
   constructor() {
-    super({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildBans,
-      ],
-    });
-
+    super({ intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.GuildMessageReactions,
+      GatewayIntentBits.MessageContent,
+      GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.GuildVoiceStates,
+      GatewayIntentBits.GuildBans,
+    ] });
     this.config = config;
     this.commands = new Collection();
     this.events = new Collection();
@@ -40,18 +37,11 @@ class LuxeBot extends Client {
       startupLog('Initializing storage...');
       const dbInstance = await initializeDatabase();
       this.db = dbInstance.db;
-
       const dbStatus = this.db.getStatus();
-      if (dbStatus.isDegraded) {
-        logger.warn('Storage is running in temporary in-memory mode. Data will reset when the bot restarts.');
-      } else {
-        startupLog(`Storage connected: ${dbStatus.connectionType}`);
-      }
-
+      startupLog(`Storage connected: ${dbStatus.connectionType}`);
       startupLog('Loading commands...');
       await loadCommands(this);
       startupLog(`Loaded ${this.commands.size} commands`);
-
       startupLog('Loading event and interaction handlers...');
       await this.loadHandlers();
       startupLog('Logging into Discord...');
@@ -68,13 +58,11 @@ class LuxeBot extends Client {
 
   setupCronJobs() {
     cron.schedule('0 6 * * *', () => checkBirthdays(this));
-    // Check every 10 seconds so giveaways don't wait for the old once-per-minute tick.
     cron.schedule('*/10 * * * * *', () => checkGiveaways(this));
   }
 
   async loadHandlers() {
-    const handlers = ['events', 'interactions'];
-    for (const name of handlers) {
+    for (const name of ['events', 'interactions']) {
       try {
         const module = await import(`./handlers/${name}.js`);
         const loader = module.default;
@@ -89,9 +77,14 @@ class LuxeBot extends Client {
   }
 
   async registerCommands() {
-    const { clientId, guildId } = this.config.bot;
+    const { clientId, guildId, multiGuild } = this.config.bot;
     if (!clientId) throw new Error('CLIENT_ID is required.');
-    if (!guildId) throw new Error('GUILD_ID is required for the current single-server setup.');
+    if (multiGuild) {
+      startupLog('Multi-guild mode enabled: registering slash commands globally.');
+      await registerSlashCommands(this, { clientId, multiGuild: true });
+      return;
+    }
+    if (!guildId) throw new Error('GUILD_ID is required when MULTI_GUILD=false.');
     await registerSlashCommands(this, { clientId, guildId, multiGuild: false });
   }
 
@@ -117,9 +110,7 @@ process.on('uncaughtException', (error) => {
   logger.error('Uncaught exception:', error);
   bot.shutdown('UNCAUGHT_EXCEPTION');
 });
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled rejection:', reason);
-});
+process.on('unhandledRejection', (reason) => logger.error('Unhandled rejection:', reason));
 bot.start();
 
 export default LuxeBot;
